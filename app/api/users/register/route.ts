@@ -1,8 +1,27 @@
-export const dynamic = "force-dynamic"; // Ensure dynamic request handling
-
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import bcrypt from 'bcryptjs';
+
+export async function GET() {
+  try {
+    // Fetch all users from database
+    const [users] = await db.query(`
+      SELECT 
+        id, name, email, role, student_id as studentId, 
+        department, title, shift, year, phone, license,
+        created_at, updated_at
+      FROM users 
+      ORDER BY created_at DESC
+    `);
+    
+    return NextResponse.json(users);
+  } catch (error) {
+    console.error('Database error:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch users from database' },
+      { status: 500 }
+    );
+  }
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -20,6 +39,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Hash the password
+    const bcrypt = await import('bcryptjs');
     const password_hash = await bcrypt.hash(password, 10);
 
     // Insert user into database
@@ -42,10 +62,17 @@ export async function POST(req: NextRequest) {
       ]
     );
 
-    // Return the auto-incremented ID of the new user
-    const insertedId = (result as any).insertId;
+    // Fetch the created user to return
+    const [newUser] = await db.query(
+      `SELECT 
+        id, name, email, role, student_id as studentId, 
+        department, title, shift, year, phone, license,
+        created_at, updated_at
+       FROM users WHERE id = ?`,
+      [(result as any).insertId]
+    );
 
-    return NextResponse.json({ message: 'User registered successfully', userId: insertedId }, { status: 201 });
+    return NextResponse.json((newUser as any[])[0], { status: 201 });
   } catch (err) {
     console.error(err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

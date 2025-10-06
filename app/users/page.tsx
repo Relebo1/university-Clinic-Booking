@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from 'react';
-import { ProtectedRoute } from '@/components/layout/protected-route';
+import { useState, useEffect } from 'react';
+import ProtectedRoute from '@/components/layout/protected-route';
 import { Navbar } from '@/components/layout/navbar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,14 +9,107 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PageHeader } from '@/components/ui/page-header';
-import { USERS } from '@/lib/dummy-data';
-import { Search, Plus, CreditCard as Edit, Trash2, User, Mail, Phone, Shield } from 'lucide-react';
+import { Search, Plus, Edit, Trash2, User, Mail, Phone, Shield, Loader2 } from 'lucide-react';
+
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: 'student' | 'staff' | 'nurse' | 'administrator';
+  studentId?: string;
+  department?: string;
+  title?: string;
+  shift?: 'morning' | 'afternoon' | 'evening';
+  year?: string;
+  phone?: string;
+  license?: string;
+  created_at?: string;
+  updated_at?: string;
+}
 
 export default function UsersPage() {
+  const [users, setUsers] = useState<User[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  const filteredUsers = USERS.filter(user => {
+  // Fetch users from database API
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  const fetchUsers = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch('/api/users');
+      if (!res.ok) throw new Error('Failed to fetch users from database');
+      const data = await res.json();
+      setUsers(data);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+      setError('Failed to load users from database. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const deleteUser = async (userId: string) => {
+    if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) return;
+    
+    try {
+      setActionLoading(`delete-${userId}`);
+      const res = await fetch(`/api/users/${userId}`, {
+        method: 'DELETE',
+      });
+      
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Failed to delete user');
+      }
+      
+      // Remove user from local state
+      setUsers(users.filter(user => user.id !== userId));
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      setError(error instanceof Error ? error.message : 'Failed to delete user');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const updateUserRole = async (userId: string, newRole: User['role']) => {
+    try {
+      setActionLoading(`role-${userId}`);
+      const res = await fetch(`/api/users/${userId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ role: newRole }),
+      });
+      
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Failed to update user role');
+      }
+      
+      const updatedUser = await res.json();
+      
+      // Update user in local state
+      setUsers(users.map(user => 
+        user.id === userId ? { ...user, ...updatedUser } : user
+      ));
+    } catch (error) {
+      console.error('Error updating user role:', error);
+      setError(error instanceof Error ? error.message : 'Failed to update user role');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const filteredUsers = users.filter(user => {
     const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          (user.studentId && user.studentId.includes(searchTerm)) ||
@@ -49,12 +142,40 @@ export default function UsersPage() {
   };
 
   const userStats = {
-    total: USERS.length,
-    students: USERS.filter(u => u.role === 'student').length,
-    staff: USERS.filter(u => u.role === 'staff').length,
-    nurses: USERS.filter(u => u.role === 'nurse').length,
-    administrators: USERS.filter(u => u.role === 'administrator').length
+    total: users.length,
+    students: users.filter(u => u.role === 'student').length,
+    staff: users.filter(u => u.role === 'staff').length,
+    nurses: users.filter(u => u.role === 'nurse').length,
+    administrators: users.filter(u => u.role === 'administrator').length
   };
+
+  if (loading) return (
+    <ProtectedRoute requiredRole="administrator">
+      <div className="min-h-screen bg-gray-50">
+        <Navbar />
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="text-center py-12">
+            <Loader2 className="mx-auto h-8 w-8 animate-spin text-blue-600" />
+            <p className="mt-2 text-gray-600">Loading users from database...</p>
+          </div>
+        </main>
+      </div>
+    </ProtectedRoute>
+  );
+
+  if (error) return (
+    <ProtectedRoute requiredRole="administrator">
+      <div className="min-h-screen bg-gray-50">
+        <Navbar />
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="text-center py-12 text-red-600">
+            <p className="mb-4">{error}</p>
+            <Button onClick={fetchUsers}>Retry</Button>
+          </div>
+        </main>
+      </div>
+    </ProtectedRoute>
+  );
 
   return (
     <ProtectedRoute requiredRole="administrator">
@@ -63,9 +184,9 @@ export default function UsersPage() {
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <PageHeader
             title="User Management"
-            description="Manage system users, roles, and permissions"
+            description="Manage system users, roles, and permissions from database"
           >
-            <Button>
+            <Button onClick={() => window.location.href = '/users/create'}>
               <Plus className="mr-2 h-4 w-4" />
               Add New User
             </Button>
@@ -214,9 +335,30 @@ export default function UsersPage() {
                             </div>
                           </td>
                           <td className="p-4">
-                            <Badge className={getRoleBadgeColor(user.role)}>
-                              {user.role}
-                            </Badge>
+                            <div className="space-y-2">
+                              <Badge className={getRoleBadgeColor(user.role)}>
+                                {user.role}
+                              </Badge>
+                              <Select 
+                                value={user.role} 
+                                onValueChange={(value: User['role']) => updateUserRole(user.id, value)}
+                                disabled={actionLoading === `role-${user.id}`}
+                              >
+                                <SelectTrigger className="w-32">
+                                  {actionLoading === `role-${user.id}` ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <SelectValue />
+                                  )}
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="student">Student</SelectItem>
+                                  <SelectItem value="staff">Staff</SelectItem>
+                                  <SelectItem value="nurse">Nurse</SelectItem>
+                                  <SelectItem value="administrator">Admin</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
                           </td>
                           <td className="p-4">
                             <div className="text-sm">
@@ -253,11 +395,25 @@ export default function UsersPage() {
                           </td>
                           <td className="p-4">
                             <div className="flex space-x-2">
-                              <Button size="sm" variant="outline">
+                              <Button 
+                                size="sm" 
+                                variant="outline"
+                                onClick={() => window.location.href = `/users/edit/${user.id}`}
+                              >
                                 <Edit className="h-3 w-3" />
                               </Button>
-                              <Button size="sm" variant="outline" className="text-red-600 hover:text-red-700">
-                                <Trash2 className="h-3 w-3" />
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                className="text-red-600 hover:text-red-700"
+                                onClick={() => deleteUser(user.id)}
+                                disabled={actionLoading === `delete-${user.id}`}
+                              >
+                                {actionLoading === `delete-${user.id}` ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-3 w-3" />
+                                )}
                               </Button>
                             </div>
                           </td>
