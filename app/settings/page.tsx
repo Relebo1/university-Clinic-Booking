@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from 'react';
-import { ProtectedRoute } from '@/components/layout/protected-route';
+// import { ProtectedRoute } from '@/components/layout/protected-route';
+import ProtectedRoute from '@/components/layout/protected-route';
 import { Navbar } from '@/components/layout/navbar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';

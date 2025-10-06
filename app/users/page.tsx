@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import ProtectedRoute from '@/components/layout/protected-route';
 import { Navbar } from '@/components/layout/navbar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -28,6 +29,7 @@ interface User {
 }
 
 export default function UsersPage() {
+  const router = useRouter();
   const [users, setUsers] = useState<User[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
@@ -46,6 +48,7 @@ export default function UsersPage() {
       const res = await fetch('/api/users');
       if (!res.ok) throw new Error('Failed to fetch users from database');
       const data = await res.json();
+      console.log('Fetched users from API:', data); // Debug: Check what IDs we're getting
       setUsers(data);
     } catch (error) {
       console.error('Error fetching users:', error);
@@ -56,21 +59,26 @@ export default function UsersPage() {
   };
 
   const deleteUser = async (userId: string) => {
+    console.log('Attempting to delete user with ID:', userId); // Debug
     if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) return;
     
     try {
       setActionLoading(`delete-${userId}`);
+      
       const res = await fetch(`/api/users/${userId}`, {
         method: 'DELETE',
       });
       
+      console.log('Delete response status:', res.status); // Debug
+      
       if (!res.ok) {
         const errorData = await res.json();
+        console.log('Delete error data:', errorData); // Debug
         throw new Error(errorData.error || 'Failed to delete user');
       }
       
       // Remove user from local state
-      setUsers(users.filter(user => user.id !== userId));
+      setUsers(users.filter(user => user.id === userId));
     } catch (error) {
       console.error('Error deleting user:', error);
       setError(error instanceof Error ? error.message : 'Failed to delete user');
@@ -80,8 +88,11 @@ export default function UsersPage() {
   };
 
   const updateUserRole = async (userId: string, newRole: User['role']) => {
+    console.log('Attempting to update user role:', userId, 'to', newRole); // Debug
+    
     try {
       setActionLoading(`role-${userId}`);
+      
       const res = await fetch(`/api/users/${userId}`, {
         method: 'PATCH',
         headers: {
@@ -90,12 +101,16 @@ export default function UsersPage() {
         body: JSON.stringify({ role: newRole }),
       });
       
+      console.log('Update role response status:', res.status); // Debug
+      
       if (!res.ok) {
         const errorData = await res.json();
+        console.log('Update role error data:', errorData); // Debug
         throw new Error(errorData.error || 'Failed to update user role');
       }
       
       const updatedUser = await res.json();
+      console.log('Updated user response:', updatedUser); // Debug
       
       // Update user in local state
       setUsers(users.map(user => 
@@ -184,9 +199,9 @@ export default function UsersPage() {
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <PageHeader
             title="User Management"
-            description="Manage system users, roles, and permissions from database"
+            description={`Manage system users, roles, and permissions - ${users.length} users found`}
           >
-            <Button onClick={() => window.location.href = '/users/create'}>
+            <Button onClick={() => router.push('/users/create')}>
               <Plus className="mr-2 h-4 w-4" />
               Add New User
             </Button>
@@ -329,8 +344,9 @@ export default function UsersPage() {
                                 <p className="font-medium text-gray-900">{user.name}</p>
                                 <p className="text-sm text-gray-500">{user.email}</p>
                                 {user.studentId && (
-                                  <p className="text-xs text-gray-400">ID: {user.studentId}</p>
+                                  <p className="text-xs text-gray-400">Student ID: {user.studentId}</p>
                                 )}
+                                <p className="text-xs text-gray-400">Database ID: {user.id}</p>
                               </div>
                             </div>
                           </td>
@@ -398,7 +414,10 @@ export default function UsersPage() {
                               <Button 
                                 size="sm" 
                                 variant="outline"
-                                onClick={() => window.location.href = `/users/edit/${user.id}`}
+                                onClick={() => {
+                                  console.log('Editing user with ID:', user.id);
+                                  router.push(`/users/edit/${user.id}`);
+                                }}
                               >
                                 <Edit className="h-3 w-3" />
                               </Button>
@@ -406,7 +425,10 @@ export default function UsersPage() {
                                 size="sm" 
                                 variant="outline" 
                                 className="text-red-600 hover:text-red-700"
-                                onClick={() => deleteUser(user.id)}
+                                onClick={() => {
+                                  console.log('Deleting user with ID:', user.id);
+                                  deleteUser(user.id);
+                                }}
                                 disabled={actionLoading === `delete-${user.id}`}
                               >
                                 {actionLoading === `delete-${user.id}` ? (
